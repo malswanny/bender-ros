@@ -78,6 +78,18 @@ void LaneDetection::readImage(const sensor_msgs::ImageConstPtr &img_msg,
     }
 }
 
+void LaneDetection::gammaCorrection()
+{
+    const double gamma = 3.0;
+    Mat lookUpTable(1, 256, CV_8U);
+    uchar* p = lookUpTable.ptr();
+    for (int i = 0; i < 256; ++i)
+    {
+        p[i] = saturate_cast<uchar>(pow(i / 255.0, gamma) * 255.0);
+    }
+    LUT(img_out_, lookUpTable, img_out_);
+}
+
 
 void LaneDetection::smooth()
 {
@@ -177,28 +189,77 @@ void LaneDetection::update()
             computeHomography();
             has_homography_ = true;
         }
-        int roi_from_top = 100;
-        int roi_from_bot = 0;
-        Range rowrange(roi_from_top, img_src_.size().height-roi_from_bot);
-        Range colrange(Range::all());
-        img_src_(rowrange, colrange).copyTo(img_out_);
-        if (scale != 1.0)
+        if (!mask_created) 
         {
-            resize(img_out_, img_out_, Size(), scale, scale);
-            cvtColor(img_out_, img_out_, COLOR_BGR2HSV);
-            smooth();
-            quantize();
-            resize(img_out_, img_out_, Size(), 1.0/scale, 1.0/scale);
+            compute_masks();
+            mask_created = true;
         }
-        else
-        {
-            cvtColor(img_out_, img_out_, COLOR_BGR2HSV);
-            smooth();
-            quantize();
+        // copy the origianl source into igm_out_
+        img_src_.copyTo(img_out_);
+        
+        //Apply the mask to take out the robot
+        img_out_.copyTo(img_out_, mask_1);
+        
+        //Blur the image to help smooth the lines
+        GaussianBlur(img_out_, img_out_, Size(5, 5), 0, 0);
+        
+        // convert the image to HLS since L is most closely associated with white
+        cvtColor(img_out_, img_out_, COLOR_BGR2HLS, 0);
+       
+        // gamma correction will use a mon-linear scale to separate the values of HLS  - higher values less speration.
+        gammaCorrection();
+        
+        // Determine the mean of L in the resulting image, This will tell us how btight the image is and help set the threshold for low_L
+        const auto result = mean(img_out_);
+        low_L = int(result(1));
+        
+        //perform an HLS threshold on the image, only keeps values between the ranges. Outputs a binary file
+        Mat hls_threshold;
+        InRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold); 
+        
+        // Determine if the threshold was too low due to the image being overexposed. If so increase low_l, until the white is only about 7% of image
+        int numberWhite = countNonZero(hls_threshold);
+        while (numberWhite > 20000) {
+            low_L = low_L + 5;
+            InRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold);
+            numberWhite = countNonZero(hls_threshold);
         }
+        
+        // Dialate the image to fill in gaps
+        Mat dilation_dst;
+        Mat element = getStructureElement(MORPH_RECT, Size(5, 5), Point(-1, 1));
+        dilate(hls_threshold, dilation_dst, element);
+        
+        
+        //find contours in the image
+        vector<vector<Point> > contours;
+		findContours(dilation_dst, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+
+        
+        // filter the contours by area, too small or too big get tossed
+		vector<vector<Point> > goodcontours;
+		double minArea = 1500;
+		double maxArea = 100000;
+		for (size_t i = 0; i < contours.size(); i++) {
+			double area = cv::contourArea(contours[i]);
+			// http://www.cplusplus.com/reference/limits/numeric_limits/
+			if (area >= minArea && area <= maxArea) {
+				goodcontours.push_back(contours.at(i));
+			}
+		}
+        
+        
+        // creat a new image of these contours
+        Mat draw_countours = Mat::zeros(hls_threshold.size(), CV_8UC1);
+        for (size_t i = 0; i < goodcontours.size(); i++) {
+
+			drawContours(draw_countours, goodcontours, (int)i, 255, 3, LINE_8);
+		}
+        draw_countours.copyTo(img_out_);
+        
         // toBinary();
         // copyMakeBorder(img_out_, img_out_, roi_from_top, roi_from_bot, 0, 0, BORDER_CONSTANT, 0);
-        // projectToGrid();
+        projectToGrid();
     } 
     else
     {

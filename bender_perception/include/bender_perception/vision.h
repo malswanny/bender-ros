@@ -75,6 +75,17 @@ class LaneDetection
          * Perform perspective transform 
          */
         void computeHomography();
+    
+        /*
+         * Perform gamma correction 
+         */
+        void gammaCorrection();
+        
+        /*
+         * Perform perspective transform 
+         */
+        void compute_masks();
+    
 
 
         /*
@@ -131,7 +142,17 @@ class LaneDetection
         bool has_centers_ = false;
         
         bool has_homography_ = false;
+        bool mask_created = false;
         Matx33d H_;     // Homography matrix computed from extrinsic and intrinsic parameters
+
+        int low_L = 0;
+        int low_S = 0;
+        int low_H = 0;
+        int high_L = 255;
+        int high_S = 255; 
+        int high_H = 180;
+    
+        Mat mask = Mat::zeros(dHeight, dWidth, CV_8UC1);
 
         void init(ros::NodeHandle *nh);
 

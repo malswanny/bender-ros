@@ -90,6 +90,13 @@ void LaneDetection::gammaCorrection()
     LUT(img_out_, lookUpTable, img_out_);
 }
 
+void LaneDetection::compute_masks()
+{ 
+	// this mask creates a black rectangle where the robot is for a camera in the center of the robot
+	rectangle(mask, Point(0, 0), Point(640, 350), Scalar(255), FILLED, LINE_8);
+	rectangle(mask, Point(0, 350), Point(150, 480), Scalar(255), FILLED, LINE_8);
+	rectangle(mask, Point(490, 350), Point(640, 480), Scalar(255), FILLED, LINE_8);
+}
 
 void LaneDetection::smooth()
 {
@@ -198,7 +205,7 @@ void LaneDetection::update()
         img_src_.copyTo(img_out_);
         
         //Apply the mask to take out the robot
-        img_out_.copyTo(img_out_, mask_1);
+        img_out_.copyTo(img_out_, mask);
         
         //Blur the image to help smooth the lines
         GaussianBlur(img_out_, img_out_, Size(5, 5), 0, 0);
@@ -233,33 +240,36 @@ void LaneDetection::update()
         
         //find contours in the image
         vector<vector<Point> > contours;
-		findContours(dilation_dst, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+	findContours(dilation_dst, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 
         
         // filter the contours by area, too small or too big get tossed
-		vector<vector<Point> > goodcontours;
-		double minArea = 1500;
-		double maxArea = 100000;
-		for (size_t i = 0; i < contours.size(); i++) {
-			double area = cv::contourArea(contours[i]);
-			// http://www.cplusplus.com/reference/limits/numeric_limits/
-			if (area >= minArea && area <= maxArea) {
-				goodcontours.push_back(contours.at(i));
-			}
+	vector<vector<Point> > goodcontours;
+	double minArea = 1500;
+	double maxArea = 100000;
+	for (size_t i = 0; i < contours.size(); i++)
+	{
+		double area = cv::contourArea(contours[i]);
+		if (area >= minArea && area <= maxArea) 
+		{
+			goodcontours.push_back(contours.at(i));
 		}
+	}
         
         
         // creat a new image of these contours
         Mat draw_countours = Mat::zeros(hls_threshold.size(), CV_8UC1);
-        for (size_t i = 0; i < goodcontours.size(); i++) {
+        for (size_t i = 0; i < goodcontours.size(); i++)
+	{
 
-			drawContours(draw_countours, goodcontours, (int)i, 255, 3, LINE_8);
-		}
+		drawContours(draw_countours, goodcontours, (int)i, 255, 3, LINE_8);
+	}
         draw_countours.copyTo(img_out_);
         
         // toBinary();
         // copyMakeBorder(img_out_, img_out_, roi_from_top, roi_from_bot, 0, 0, BORDER_CONSTANT, 0);
         projectToGrid();
+	displayOutput();    
     } 
     else
     {

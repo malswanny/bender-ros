@@ -152,7 +152,7 @@ class LaneDetection
         int high_S = 255; 
         int high_H = 180;
     
-        Mat mask = Mat::zeros(dHeight, dWidth, CV_8UC1);
+        Mat mask = Mat::zeros(480, 640, CV_8UC1);
 
         void init(ros::NodeHandle *nh);
 

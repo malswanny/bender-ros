@@ -80,11 +80,7 @@ class LaneDetection
          * Perform gamma correction 
          */
         void gammaCorrection();
-        
-        /*
-         * Perform perspective transform 
-         */
-        void compute_masks();
+       
     
 
 
@@ -139,7 +135,9 @@ class LaneDetection
         Mat img_src_;
         Mat img_out_;
         Mat labels_, centers_;
-        bool has_centers_ = false;
+	Mat mask;   
+   
+	bool has_centers_ = false;
         
         bool has_homography_ = false;
         bool mask_created = false;
@@ -152,7 +150,7 @@ class LaneDetection
         int high_S = 255; 
         int high_H = 180;
     
-        Mat mask = Mat::zeros(480, 640, CV_8UC1);
+	double w, h;
 
         void init(ros::NodeHandle *nh);
 

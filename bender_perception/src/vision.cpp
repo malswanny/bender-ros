@@ -90,13 +90,6 @@ void LaneDetection::gammaCorrection()
     LUT(img_out_, lookUpTable, img_out_);
 }
 
-void LaneDetection::compute_masks()
-{ 
-	// this mask creates a black rectangle where the robot is for a camera in the center of the robot
-	rectangle(mask, Point(0, 0), Point(640, 350), Scalar(255), FILLED, LINE_8);
-	rectangle(mask, Point(0, 350), Point(150, 480), Scalar(255), FILLED, LINE_8);
-	rectangle(mask, Point(490, 350), Point(640, 480), Scalar(255), FILLED, LINE_8);
-}
 
 void LaneDetection::smooth()
 {
@@ -193,12 +186,21 @@ void LaneDetection::update()
     {
         if (!has_homography_)
         {
-            computeHomography();
+
+	    Size image_size = img_src_.size();
+    	    double w = (double)image_size.width;
+    	    double h = (double)image_size.height;
+    
+	    computeHomography();
             has_homography_ = true;
         }
         if (!mask_created) 
         {
-            compute_masks();
+            mask = Mat::zeros(h, w, CV_8UC1);
+            rectangle(mask, Point(0, 0), Point(640, 350), Scalar(255), FILLED, LINE_8);
+            rectangle(mask, Point(0, 350), Point(150, 480), Scalar(255), FILLED, LINE_8);
+            rectangle(mask, Point(490, 350), Point(640, 480), Scalar(255), FILLED, LINE_8);
+
             mask_created = true;
         }
         // copy the origianl source into igm_out_
@@ -222,19 +224,19 @@ void LaneDetection::update()
         
         //perform an HLS threshold on the image, only keeps values between the ranges. Outputs a binary file
         Mat hls_threshold;
-        InRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold); 
+        inRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold); 
         
         // Determine if the threshold was too low due to the image being overexposed. If so increase low_l, until the white is only about 7% of image
         int numberWhite = countNonZero(hls_threshold);
         while (numberWhite > 20000) {
             low_L = low_L + 5;
-            InRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold);
+            inRange(img_out_, Scalar(low_H, low_L, low_S), Scalar(high_H, high_L, high_S), hls_threshold);
             numberWhite = countNonZero(hls_threshold);
         }
         
         // Dialate the image to fill in gaps
         Mat dilation_dst;
-        Mat element = getStructureElement(MORPH_RECT, Size(5, 5), Point(-1, 1));
+        Mat element = getStructuringElement(MORPH_RECT, Size(5, 5), Point(-1, 1));
         dilate(hls_threshold, dilation_dst, element);
         
         
@@ -280,9 +282,6 @@ void LaneDetection::update()
 
 void LaneDetection::computeHomography()
 {
-    Size image_size = img_src_.size();
-    double w = (double)image_size.width;
-    double h = (double)image_size.height;
 
     // TODO: Load these from a yaml file
     double alpha = (15-90) * M_PI / 180.0;
